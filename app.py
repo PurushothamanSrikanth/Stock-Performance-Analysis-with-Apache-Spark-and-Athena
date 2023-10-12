@@ -38,7 +38,7 @@ sym_meta_schema = StructType([ \
     StructField("Address", StringType(), True) \
 ])
 
-sym_meta = spark.read.option("header", false).schema(sym_meta_schema).csv(S3_BUCKET_PATH+"/"+"symbol_metadata.csv", )
+sym_meta = spark.read.option("header", False).schema(sym_meta_schema).csv(S3_BUCKET_PATH+"/"+"symbol_metadata.csv", )
 
 sym_meta.printSchema() #check the Schema of the dataframe
 #sym_meta.show()
