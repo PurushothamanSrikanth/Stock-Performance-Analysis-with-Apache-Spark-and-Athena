@@ -7,6 +7,7 @@ from pyspark.sql import *
 import boto3
 import findspark
 findspark.init()
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType
 
 #Creating a Spark Session
 
