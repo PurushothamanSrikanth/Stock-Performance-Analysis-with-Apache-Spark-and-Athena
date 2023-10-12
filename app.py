@@ -14,6 +14,9 @@ from pyspark.sql.types import StructType, StructField, StringType, IntegerType, 
 conf = SparkConf() \
     .setAppName("Purush_ETL")
 
+conf.set('spark.jars.packages', 'org.apache.hadoop:hadoop-aws:3.2.0')
+conf.set('spark.hadoop.fs.s3a.aws.credentials.provider', 'org.apache.hadoop.fs.s3a.AnonymousAWSCredentialsProvider')
+ 
 spark = SparkSession \
     .builder \
     .config(conf = conf) \
@@ -38,7 +41,7 @@ sym_meta_schema = StructType([ \
     StructField("Address", StringType(), True) \
 ])
 
-sym_meta = spark.read.option("header", False).schema(sym_meta_schema).csv(S3_BUCKET_PATH+"/"+"symbol_metadata.csv", )
+sym_meta = spark.read.option("header", False).schema(sym_meta_schema).csv(S3_BUCKET_PATH+"symbol_metadata.csv")
 
 sym_meta.printSchema() #check the Schema of the dataframe
 #sym_meta.show()
@@ -63,7 +66,7 @@ stock_data_schema = StructType([ \
 
 
 
-stock_data = spark.read.option("header", False).schema(stock_data_schema).csv([S3_BUCKET_PATH+"/"+x for x in sym_list])
+stock_data = spark.read.option("header", False).schema(stock_data_schema).csv([S3_BUCKET_PATH+x for x in sym_list])
 
 stock_data.printSchema() #to check the Schema of the dataframe
 #stock_data.show()
