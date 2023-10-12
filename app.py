@@ -63,7 +63,7 @@ stock_data_schema = StructType([ \
 
 
 
-stock_data = spark.read.option("header", false).schema(stock_data_schema).csv([S3_BUCKET_PATH+"/"+x for x in sym_list])
+stock_data = spark.read.option("header", False).schema(stock_data_schema).csv([S3_BUCKET_PATH+"/"+x for x in sym_list])
 
 stock_data.printSchema() #to check the Schema of the dataframe
 #stock_data.show()
