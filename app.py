@@ -4,6 +4,7 @@ import pandas, numpy, os
 import pyspark
 from pyspark import SparkConf, SparkContext
 from pyspark.sql import *
+from  pyspark.sql.functions import *
 import boto3
 import findspark
 findspark.init()
@@ -23,7 +24,7 @@ spark = SparkSession \
     .config("spark.dynamicAllocation.enabled", "true") \
     .enableHiveSupport() \
     .getOrCreate()
-
+spark.catalog.clearCache()
 S3_BUCKET_PATH = "s3a://purushstockdata/data/"
 
 
@@ -65,26 +66,31 @@ stock_data_schema = StructType([ \
 ])
 
 stock_data_paths = [S3_BUCKET_PATH+x+".csv" for x in sym_list]
-print(stock_data_paths)
-stock_data = spark.read.option("header", True).schema(stock_data_schema).csv(stock_data_paths)
-
-stock_data.printSchema() #to check the Schema of the dataframe
+#print(stock_data_paths)
+#stock_data = spark.read.option("header", True).schema(stock_data_schema).csv(stock_data_paths)
+#stock_data.printSchema() #to check the Schema of the dataframe
 #stock_data.show()
 
-stock_data.withColumn("Symbol", input_file_name()).repartition(col("Symbol"))
-stock_data_full = stock_data.join(sym_meta, upper(stock_data["Symbol"]) == upper(sym_meta["Symbol"]), "left")\
-    .select(stock_data['*'], 
-            sym_meta["Symbol"],
+stock_data = spark.read.schema(stock_data_schema).csv(stock_data_paths, header=True)
+stock_data = stock_data.withColumn("Symbol", regexp_replace(input_file_name(), r'^.*/([^/]+)\.csv$', '$1'))
+#stock_data.printSchema() #to check the Schema of the dataframe
+stock_data.show()
+
+stock_data_full = stock_data.join(sym_meta, upper(stock_data["Symbol"]) == upper(sym_meta["Symbol"]), "left") \
+    .select(stock_data['*'],
             sym_meta["Name"],
             sym_meta["Country"],
             sym_meta["Sector"],
-            sym_meta["Industry"])
+            sym_meta["Industry"]) \
+    .repartition(col("Symbol")) 
 
 stock_data_full.printSchema()
+stock_data_full.show()
+
 
 ### Summary Report (All Time)
 def summary_report_all_func(stock_data_full, industries):
-    summary_report_output__all_time = stock_data_full.filter(stock_data_full["Sector"].isin(industries)) \
+    summary_report_output__all_time = stock_data_full.filter(stock_data_full["Sector"].isin(sectors)) \
         .groupBy(stock_data_full["Sector"])\
         .agg(
             avg(stock_data_full["open"]).alias("Avg Open Price"), \
@@ -93,25 +99,25 @@ def summary_report_all_func(stock_data_full, industries):
             min(stock_data_full["low"]).alias("Min Low Price"), \
             avg(stock_data_full["volume"]).alias("Avg Volume") \
         )
-    
     summary_report_output__all_time.printSchema()
-
     #For developmental purposes I'm trying to store the data in a Dataframe and then return it; rather than directly returning it.
     return summary_report_output__all_time
 
 
 no_industries = int(input("Enter the number of industries for which you wanted Summary Report (All Time):"))
-arr = input()   # takes the whole line of no_industries strings
-industries = list(arr.split(',')) # split those strings with ','
+arr = input()   # takes the whole line of no_sectors strings
+sectors = [sector.strip() for sector in arr.split(',')] # split those strings with ','
 
-summary_report_all_func(stock_data_full, industries).show(n = len(sym_list))
+summary_report_all_func(stock_data_full, sectors).show(n = len(sym_list), truncate = False)
 
 
 ### Summary Report (Period)
 def summary_report_period_func(stock_data_full, sectors, start_date, end_date):
+    start_date = to_date(lit(start_date), "yyyy-MM-dd")
+    end_date = to_date(lit(end_date), "yyyy-MM-dd")
     summary_report_output__period = stock_data_full \
-        .filter(stock_data_full["Sector"].isin(sectors), 
-                to_date(stock_data_full["timestamp"], "YYYY-MM-DD").between(start_date, end_date)
+        .filter((stock_data_full["Sector"].isin(sectors))  & \
+                (to_date(stock_data_full["timestamp"], "yyyy-MM-dd").between(start_date, end_date))
         ) \
         .groupBy(stock_data_full["Sector"]) \
         .agg(
@@ -121,25 +127,26 @@ def summary_report_period_func(stock_data_full, sectors, start_date, end_date):
             min(stock_data_full["low"]).alias("Min Low Price"), \
             avg(stock_data_full["volume"]).alias("Avg Volume") \
         )
-
     #For developmental purposes I'm trying to store the data in a Dataframe and then return it; rather than directly returning it.
     return summary_report_output__period
 
 
-start_date = to_date(input("Enter the start date of the period for Summary Report [YYYY-MM-DD]:"), "YYYY-MM-DD")
-end_date = to_date(input("Enter the end date of the period for Summary Report [YYYY-MM-DD]:"), "YYYY-MM-DD")
+start_date = input("Enter the start date of the period for Summary Report [yyyy-MM-dd]:")
+end_date = input("Enter the end date of the period for Summary Report [yyyy-MM-dd]:")
 no_sectors = int(input("Enter the number of sectors for which you wanted Summary Report (Given Period):"))
 arr = input()   # takes the whole line of no_sectors strings
-sectors = list(arr.split(',')) # split those strings with ','
+sectors = [sector.strip() for sector in arr.split(',')] # split those strings with ','
 
-summary_report_period_func(stock_data_full, sectors, start_date, end_date).show(n = len(sym_list))
+summary_report_period_func(stock_data_full, sectors, start_date, end_date).show(n = len(sym_list), truncate = False)
 
 ### Detailed Reports (Period)
 def detailed_report_period_func(stock_data_full, sectors, start_date, end_date):
+    start_date = to_date(lit(start_date), "yyyy-MM-dd")
+    end_date = to_date(lit(end_date), "yyyy-MM-dd")
+
     detailed_report_output__period = stock_data_full \
-        .filter(stock_data_full["Sector"].isin(sectors), 
-                to_date(stock_data_full["timestamp"], "YYYY-MM-DD").between(start_date, end_date)
-        ) \
+        .filter((stock_data_full["Sector"].isin(sectors)) & \
+                (to_date(stock_data_full["timestamp"], "yyyy-MM-dd").between(start_date, end_date))) \
         .groupBy(stock_data_full["Symbol"], stock_data_full["Name"]) \
         .agg(
             avg(stock_data_full["open"]).alias("Avg Open Price"), \
@@ -148,16 +155,15 @@ def detailed_report_period_func(stock_data_full, sectors, start_date, end_date):
             min(stock_data_full["low"]).alias("Min Low Price"), \
             avg(stock_data_full["volume"]).alias("Avg Volume") \
         )
-
     #For developmental purposes I'm trying to store the data in a Dataframe and then return it; rather than directly returning it.
-    detailed_report_output__period.printSchema()
+    return detailed_report_output__period
 
-start_date = to_date(input("Enter the start date of the period for Detailed Reports [YYYY-MM-DD]:"), "YYYY-MM-DD")
-end_date = to_date(input("Enter the end date of the period for Detailed Reports [YYYY-MM-DD]:"), "YYYY-MM-DD")
+start_date = input("Enter the start date of the period for Detailed Reports [yyyy-MM-dd]:")
+end_date = input("Enter the end date of the period for Detailed Reports [yyyy-MM-dd]:")
 no_sectors = int(input("Enter the number of sectors for which you wanted Detailed Report (Given Period):"))
 arr = input()   # takes the whole line of no_sectors strings
-sectors = list(arr.split(',')) # split those strings with ','
+sectors = [sector.strip() for sector in arr.split(',')] # split those strings with ','
 
-detailed_report_output__period(stock_data_full, sectors, start_date, end_date).show(n = len(sym_list))
+detailed_report_period_func(stock_data_full, sectors, start_date, end_date).show(n = len(sym_list), truncate = False)
 
 spark.stop()
