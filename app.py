@@ -7,7 +7,7 @@ from pyspark.sql import *
 import boto3
 import findspark
 findspark.init()
-from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DecimalType
 
 #Creating a Spark Session
 
@@ -41,14 +41,14 @@ sym_meta_schema = StructType([ \
     StructField("Address", StringType(), True) \
 ])
 
-sym_meta = spark.read.option("header", False).schema(sym_meta_schema).csv(S3_BUCKET_PATH+"symbol_metadata.csv")
+sym_meta = spark.read.option("header", True).schema(sym_meta_schema).csv(S3_BUCKET_PATH+"symbol_metadata.csv")
 
 sym_meta.printSchema() #check the Schema of the dataframe
-#sym_meta.show()
+sym_meta.show()
 
 ## Before reading the Stock data, we need to make sure we read the Stock data  
 ## only for those companies/symbols that are listed in the Metadata file.
-sym_list = [x for x in sym_meta["Symbol"].rdd.flatMap(lambda x: x).collect()]
+sym_list = sym_meta.select("Symbol").rdd.flatMap(lambda x: x).collect()
 #print(sym_list)
 
 
@@ -64,9 +64,9 @@ stock_data_schema = StructType([ \
     StructField("volume", IntegerType(), True) \
 ])
 
+stock_data_paths = [S3_BUCKET_PATH+x+".csv" for x in sym_list]
 
-
-stock_data = spark.read.option("header", False).schema(stock_data_schema).csv([S3_BUCKET_PATH+x for x in sym_list])
+stock_data = spark.read.option("header", True).schema(stock_data_schema).csv(stock_data_paths)
 
 stock_data.printSchema() #to check the Schema of the dataframe
 #stock_data.show()
