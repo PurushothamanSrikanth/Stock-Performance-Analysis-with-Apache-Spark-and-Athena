@@ -44,7 +44,7 @@ sym_meta_schema = StructType([ \
 sym_meta = spark.read.option("header", True).schema(sym_meta_schema).csv(S3_BUCKET_PATH+"symbol_metadata.csv")
 
 sym_meta.printSchema() #check the Schema of the dataframe
-sym_meta.show()
+#sym_meta.show()
 
 ## Before reading the Stock data, we need to make sure we read the Stock data  
 ## only for those companies/symbols that are listed in the Metadata file.
@@ -65,7 +65,7 @@ stock_data_schema = StructType([ \
 ])
 
 stock_data_paths = [S3_BUCKET_PATH+x+".csv" for x in sym_list]
-
+print(stock_data_paths)
 stock_data = spark.read.option("header", True).schema(stock_data_schema).csv(stock_data_paths)
 
 stock_data.printSchema() #to check the Schema of the dataframe
