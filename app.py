@@ -74,7 +74,7 @@ stock_data_paths = [S3_BUCKET_PATH+x+".csv" for x in sym_list]
 stock_data = spark.read.schema(stock_data_schema).csv(stock_data_paths, header=True)
 stock_data = stock_data.withColumn("Symbol", regexp_replace(input_file_name(), r'^.*/([^/]+)\.csv$', '$1'))
 #stock_data.printSchema() #to check the Schema of the dataframe
-stock_data.show()
+#stock_data.show()
 
 stock_data_full = stock_data.join(sym_meta, upper(stock_data["Symbol"]) == upper(sym_meta["Symbol"]), "left") \
     .select(stock_data['*'],
@@ -85,7 +85,7 @@ stock_data_full = stock_data.join(sym_meta, upper(stock_data["Symbol"]) == upper
     .repartition(col("Symbol")) 
 
 stock_data_full.printSchema()
-stock_data_full.show()
+#stock_data_full.show()
 
 
 ### Summary Report (All Time)
